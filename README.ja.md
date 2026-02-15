@@ -94,7 +94,7 @@ import { Resistor } from "../component-libs/core-primitives.js";
 - `E004`: 短絡リスク（同一ネットにGND系ピンと電源系ピンが混在）
 - `E005`: 過電圧リスク（ネット電圧がピン `vmax` を超過）
 - `E006`: トランジスタ/FETの向き・接続リスク
-- `E007`: 接続部品不足（現状はフライバック保護とLED直列抵抗を検査）
+- `E007`: 接続部品不足（コンポーネント定義の `requires` 違反）
 
 ## 検証範囲（現状）
 
@@ -112,13 +112,13 @@ import { Resistor } from "../component-libs/core-primitives.js";
 - ピン役割（`gnd` / `power_in` / `power_out`）とネット電圧に基づく短絡リスク検出: `E004`
 - 明示的なネット電圧とピン `vmax` に基づく過電圧リスク検出: `E005`
 - BJT/MOSFETのピン接続・向きリスク検出: `E006`
-- 接続部品不足検出（サブタイプ）: フライバック保護・LED直列抵抗: `E007`
+- コンポーネント定義の接続要件（`requires`）違反検出: `E007`
 
 補足:
 
 - `E002` は `optional: true` が付いたピンを未接続エラーにしません。
 - `E006` は名前推測ではなく、`net_role` / `lt` / `gt` / `neq` などのピン契約に基づいて判定します。
-- `E007` は診断メッセージ内にサブタイプ（例: `[flyback_diode]`, `[led_series_resistor]`）を含みます。
+- `E007` は不足した要件ID/タグ（例: `[flyback_diode]`, `[led_series_resistor]`）を診断メッセージに含みます。
 
 まだ検査しないこと:
 

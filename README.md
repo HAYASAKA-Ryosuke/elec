@@ -107,7 +107,7 @@ If `lint` fails, fix TS source and regenerate SCM.
 - `E004`: short-circuit risk (ground pins + power pins on same net)
 - `E005`: overvoltage risk (net voltage exceeds pin `vmax`)
 - `E006`: transistor/FET orientation or connection risk
-- `E007`: connection component missing (currently flyback diode and LED series resistor checks)
+- `E007`: connection component missing (component `requires` contract violation)
 
 ## Validation Scope (Current)
 
@@ -125,13 +125,13 @@ What `lint` checks:
 - Short-circuit risk using pin roles (`gnd`, `power_in`, `power_out`) and net voltage: `E004`
 - Overvoltage risk using explicit net voltage vs pin `vmax`: `E005`
 - Orientation/connection risk for BJT/MOSFET pin usage: `E006`
-- Connection-component checks (subtypes): flyback diode and LED series resistor: `E007`
+- Connection-component requirements declared in component definitions (`requires`): `E007`
 
 Notes:
 
 - `E002` ignores pins explicitly marked `optional: true`.
 - `E006` is contract-based (pin constraints like `net_role`, `lt`, `gt`, `neq`), not name-pattern based.
-- `E007` includes subtype tags in diagnostics, e.g. `[flyback_diode]`, `[led_series_resistor]`.
+- `E007` reports the missing requirement id/tag (for example `[flyback_diode]`, `[led_series_resistor]`).
 
 What is not checked yet:
 

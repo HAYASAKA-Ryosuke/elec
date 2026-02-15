@@ -28,6 +28,9 @@
     (comp RL1
       (type relay)
       (pins (1) (2))
+      (requires
+        (component_between_nets diode 1 2 flyback_diode)
+      )
       (props)
     )
   )

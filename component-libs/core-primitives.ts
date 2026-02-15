@@ -21,6 +21,9 @@ export const Capacitor = defineComponent({
 export const Led = defineComponent({
   kind: "Passive",
   name: "led",
+  requires: [
+    { kind: "component_on_net", id: "led_series_resistor", componentType: "resistor", pin: "A" }
+  ],
   pins: {
     A: {},
     K: {}
@@ -30,6 +33,18 @@ export const Led = defineComponent({
 export const Switch = defineComponent({
   kind: "Passive",
   name: "switch",
+  pins: {
+    "1": {},
+    "2": {}
+  }
+});
+
+export const Relay = defineComponent({
+  kind: "Actuator",
+  name: "relay",
+  requires: [
+    { kind: "component_between_nets", id: "flyback_diode", componentType: "diode", pinA: "1", pinB: "2" }
+  ],
   pins: {
     "1": {},
     "2": {}

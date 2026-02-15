@@ -18,6 +18,9 @@
       )
       (props
       )
+      (requires
+        (component_on_net resistor A led_series_resistor)
+      )
     )
     (comp R_LED
       (type resistor)
