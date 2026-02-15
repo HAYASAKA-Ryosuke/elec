@@ -8,6 +8,11 @@ export type PinSpec = {
   vmin?: number;
   vmax?: number;
   optional?: boolean;
+  class?: string;
+  netRole?: "gnd" | "power" | "signal";
+  lowerThan?: string[];
+  higherThan?: string[];
+  notSameNetWith?: string[];
 };
 
 export type ComponentDef = {
@@ -43,7 +48,18 @@ export type CircuitIR = {
   components: Array<{
     id: string;
     type: string;
-    pins: Array<{ name: string; role?: PinRole; vmin?: number; vmax?: number; optional?: boolean }>;
+    pins: Array<{
+      name: string;
+      role?: PinRole;
+      vmin?: number;
+      vmax?: number;
+      optional?: boolean;
+      class?: string;
+      netRole?: "gnd" | "power" | "signal";
+      lowerThan?: string[];
+      higherThan?: string[];
+      notSameNetWith?: string[];
+    }>;
     props: Record<string, string>;
   }>;
   nets: NetDef[];
@@ -63,7 +79,12 @@ export function defineComponent<TDef extends ComponentDef>(def: TDef) {
         role: spec.role,
         vmin: spec.vmin,
         vmax: spec.vmax,
-        optional: spec.optional
+        optional: spec.optional,
+        class: spec.class,
+        netRole: spec.netRole,
+        lowerThan: spec.lowerThan ? [...spec.lowerThan] : undefined,
+        higherThan: spec.higherThan ? [...spec.higherThan] : undefined,
+        notSameNetWith: spec.notSameNetWith ? [...spec.notSameNetWith] : undefined
       };
     }
     return {
@@ -126,7 +147,12 @@ export class CircuitBuilder {
         role: p.pinSpecs[name]?.role,
         vmin: p.pinSpecs[name]?.vmin,
         vmax: p.pinSpecs[name]?.vmax,
-        optional: p.pinSpecs[name]?.optional
+        optional: p.pinSpecs[name]?.optional,
+        class: p.pinSpecs[name]?.class,
+        netRole: p.pinSpecs[name]?.netRole,
+        lowerThan: p.pinSpecs[name]?.lowerThan ? [...(p.pinSpecs[name]?.lowerThan ?? [])] : undefined,
+        higherThan: p.pinSpecs[name]?.higherThan ? [...(p.pinSpecs[name]?.higherThan ?? [])] : undefined,
+        notSameNetWith: p.pinSpecs[name]?.notSameNetWith ? [...(p.pinSpecs[name]?.notSameNetWith ?? [])] : undefined
       })),
       props: { ...p.props }
     }));

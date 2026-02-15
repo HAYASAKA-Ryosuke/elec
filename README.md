@@ -101,6 +101,8 @@ If `lint` fails, fix TS source and regenerate SCM.
 - `E003`: missing I2C pull-up (both SDA and SCL required)
 - `E004`: short-circuit risk (ground pins + power pins on same net)
 - `E005`: overvoltage risk (net voltage exceeds pin `vmax`)
+- `E006`: transistor/FET orientation or connection risk
+- `E007`: missing flyback diode for inductive load
 
 ## Validation Scope (Current)
 
@@ -117,10 +119,13 @@ What `lint` checks:
 - I2C pull-up presence on both SDA and SCL to VCC: `E003`
 - Short-circuit risk using pin roles (`gnd`, `power_in`, `power_out`) and net voltage: `E004`
 - Overvoltage risk using explicit net voltage vs pin `vmax`: `E005`
+- Orientation/connection risk for BJT/MOSFET pin usage: `E006`
+- Missing protection diode for relay/motor/solenoid/inductor paths: `E007`
 
 Notes:
 
 - `E002` ignores pins explicitly marked `optional: true`.
+- `E006` is contract-based (pin constraints like `net_role`, `lt`, `gt`, `neq`), not name-pattern based.
 
 What is not checked yet:
 

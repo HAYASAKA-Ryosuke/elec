@@ -124,11 +124,33 @@ function stripZero(n: number): string {
   return n.toFixed(6).replace(/\.0+$/, "").replace(/(\.\d*?)0+$/, "$1");
 }
 
-function parsePinEntry(entry: SExpr): { name: string; role?: PinRole; vmin?: number; vmax?: number; optional?: boolean } {
+function parsePinEntry(entry: SExpr): {
+  name: string;
+  role?: PinRole;
+  vmin?: number;
+  vmax?: number;
+  optional?: boolean;
+  class?: string;
+  netRole?: "gnd" | "power" | "signal";
+  lowerThan?: string[];
+  higherThan?: string[];
+  notSameNetWith?: string[];
+} {
   const items = asList(entry);
   if (items.length === 0) parseError("empty pin entry", entry.pos);
   const name = asAtom(items[0]!);
-  const out: { name: string; role?: PinRole; vmin?: number; vmax?: number; optional?: boolean } = { name };
+  const out: {
+    name: string;
+    role?: PinRole;
+    vmin?: number;
+    vmax?: number;
+    optional?: boolean;
+    class?: string;
+    netRole?: "gnd" | "power" | "signal";
+    lowerThan?: string[];
+    higherThan?: string[];
+    notSameNetWith?: string[];
+  } = { name };
 
   for (const kv of items.slice(1)) {
     const pair = asList(kv);
@@ -138,6 +160,11 @@ function parsePinEntry(entry: SExpr): { name: string; role?: PinRole; vmin?: num
     if (k === "vmin") out.vmin = Number(v);
     if (k === "vmax") out.vmax = Number(v);
     if (k === "optional") out.optional = v === "true";
+    if (k === "class") out.class = v;
+    if (k === "net_role") out.netRole = v as "gnd" | "power" | "signal";
+    if (k === "lt") out.lowerThan = [...(out.lowerThan ?? []), v];
+    if (k === "gt") out.higherThan = [...(out.higherThan ?? []), v];
+    if (k === "neq") out.notSameNetWith = [...(out.notSameNetWith ?? []), v];
   }
 
   return out;
@@ -163,7 +190,18 @@ export function parseScm(input: string): CircuitIR {
         if (asAtom(ci[0]!) !== "comp") parseError("expected comp", c.pos);
         const id = asAtom(ci[1]!);
         let type = "part";
-        let pins: Array<{ name: string; role?: PinRole; vmin?: number; vmax?: number; optional?: boolean }> = [];
+        let pins: Array<{
+          name: string;
+          role?: PinRole;
+          vmin?: number;
+          vmax?: number;
+          optional?: boolean;
+          class?: string;
+          netRole?: "gnd" | "power" | "signal";
+          lowerThan?: string[];
+          higherThan?: string[];
+          notSameNetWith?: string[];
+        }> = [];
         const props: Record<string, string> = {};
 
         for (const prop of ci.slice(2)) {
@@ -248,12 +286,28 @@ export function parseScm(input: string): CircuitIR {
   return { components, nets, constraints: { i2c } };
 }
 
-function pinLine(pin: { name: string; role?: PinRole; vmin?: number; vmax?: number; optional?: boolean }): string {
+function pinLine(pin: {
+  name: string;
+  role?: PinRole;
+  vmin?: number;
+  vmax?: number;
+  optional?: boolean;
+  class?: string;
+  netRole?: "gnd" | "power" | "signal";
+  lowerThan?: string[];
+  higherThan?: string[];
+  notSameNetWith?: string[];
+}): string {
   const attrs: string[] = [];
   if (pin.role) attrs.push(`(role ${pin.role})`);
   if (pin.vmin !== undefined) attrs.push(`(vmin ${stripZero(pin.vmin)})`);
   if (pin.vmax !== undefined) attrs.push(`(vmax ${stripZero(pin.vmax)})`);
   if (pin.optional) attrs.push("(optional true)");
+  if (pin.class) attrs.push(`(class ${pin.class})`);
+  if (pin.netRole) attrs.push(`(net_role ${pin.netRole})`);
+  for (const p of [...(pin.lowerThan ?? [])].sort((a, b) => a.localeCompare(b))) attrs.push(`(lt ${p})`);
+  for (const p of [...(pin.higherThan ?? [])].sort((a, b) => a.localeCompare(b))) attrs.push(`(gt ${p})`);
+  for (const p of [...(pin.notSameNetWith ?? [])].sort((a, b) => a.localeCompare(b))) attrs.push(`(neq ${p})`);
   if (attrs.length === 0) return `        (${pin.name})`;
   return `        (${pin.name} ${attrs.join(" ")})`;
 }
@@ -321,8 +375,18 @@ export function lintScm(file: string, ir: CircuitIR): LintDiag[] {
   const diags: LintDiag[] = [];
 
   const compMap = new Map(ir.components.map((c) => [c.id, c]));
+  const netMap = new Map(ir.nets.map((n) => [n.name, n]));
   const connected = new Set<string>();
   const pinNets = new Map<string, Set<string>>();
+  const firstNetForPin = (compId: string, pinName: string): string | undefined => {
+    const nets = pinNets.get(`${compId}.${pinName}`);
+    if (!nets || nets.size === 0) return undefined;
+    return [...nets].sort((a, b) => a.localeCompare(b))[0];
+  };
+  const netVoltage = (netName: string | undefined): number | undefined => {
+    if (!netName) return undefined;
+    return netMap.get(netName)?.voltage;
+  };
 
   for (const n of ir.nets) {
     for (const c of n.connect) {
@@ -428,6 +492,142 @@ export function lintScm(file: string, ir: CircuitIR): LintDiag[] {
           message: `overvoltage risk: '${conn.comp}.${conn.pin}' vmax=${pin.vmax}V but net '${net.name}' is ${net.voltage}V`
         });
       }
+    }
+  }
+
+  for (const comp of ir.components) {
+    const pinByName = new Map(comp.pins.map((p) => [p.name, p]));
+    for (const pin of comp.pins) {
+      const pinNet = firstNetForPin(comp.id, pin.name);
+      const pinV = netVoltage(pinNet);
+
+      if (pin.netRole === "gnd" && pinV !== undefined && pinV > 0.2 + EPS) {
+        diags.push({
+          file,
+          line: 1,
+          col: 1,
+          code: "E006",
+          message: `contract violation: '${comp.id}.${pin.name}' expects gnd-like net but got ${pinV}V on '${pinNet}'`
+        });
+      }
+      if (pin.netRole === "power" && pinV !== undefined && pinV < 0.2 - EPS) {
+        diags.push({
+          file,
+          line: 1,
+          col: 1,
+          code: "E006",
+          message: `contract violation: '${comp.id}.${pin.name}' expects power net but got ${pinV}V on '${pinNet}'`
+        });
+      }
+
+      for (const otherName of pin.lowerThan ?? []) {
+        const otherPin = pinByName.get(otherName);
+        if (!otherPin) {
+          diags.push({
+            file,
+            line: 1,
+            col: 1,
+            code: "E006",
+            message: `contract violation: '${comp.id}.${pin.name}' references missing pin '${otherName}' in lt constraint`
+          });
+          continue;
+        }
+        const otherNet = firstNetForPin(comp.id, otherPin.name);
+        const otherV = netVoltage(otherNet);
+        if (pinV !== undefined && otherV !== undefined && !(pinV + EPS < otherV)) {
+          diags.push({
+            file,
+            line: 1,
+            col: 1,
+            code: "E006",
+            message: `contract violation: '${comp.id}.${pin.name}' (${pinV}V) must be lower than '${otherPin.name}' (${otherV}V)`
+          });
+        }
+      }
+
+      for (const otherName of pin.higherThan ?? []) {
+        const otherPin = pinByName.get(otherName);
+        if (!otherPin) {
+          diags.push({
+            file,
+            line: 1,
+            col: 1,
+            code: "E006",
+            message: `contract violation: '${comp.id}.${pin.name}' references missing pin '${otherName}' in gt constraint`
+          });
+          continue;
+        }
+        const otherNet = firstNetForPin(comp.id, otherPin.name);
+        const otherV = netVoltage(otherNet);
+        if (pinV !== undefined && otherV !== undefined && !(pinV > otherV + EPS)) {
+          diags.push({
+            file,
+            line: 1,
+            col: 1,
+            code: "E006",
+            message: `contract violation: '${comp.id}.${pin.name}' (${pinV}V) must be higher than '${otherPin.name}' (${otherV}V)`
+          });
+        }
+      }
+
+      for (const otherName of pin.notSameNetWith ?? []) {
+        const otherPin = pinByName.get(otherName);
+        if (!otherPin) {
+          diags.push({
+            file,
+            line: 1,
+            col: 1,
+            code: "E006",
+            message: `contract violation: '${comp.id}.${pin.name}' references missing pin '${otherName}' in neq constraint`
+          });
+          continue;
+        }
+        const otherNet = firstNetForPin(comp.id, otherPin.name);
+        if (pinNet && otherNet && pinNet === otherNet) {
+          diags.push({
+            file,
+            line: 1,
+            col: 1,
+            code: "E006",
+            message: `contract violation: '${comp.id}.${pin.name}' must not share net with '${otherPin.name}' (both on '${pinNet}')`
+          });
+        }
+      }
+    }
+  }
+
+  const diodePairs = new Set<string>();
+  for (const comp of ir.components) {
+    if (!/(diode|flyback|schottky|tvs)/i.test(comp.type)) continue;
+    if (comp.pins.length < 2) continue;
+    const p0 = comp.pins[0]?.name;
+    const p1 = comp.pins[1]?.name;
+    if (!p0 || !p1) continue;
+    const n0 = firstNetForPin(comp.id, p0);
+    const n1 = firstNetForPin(comp.id, p1);
+    if (!n0 || !n1 || n0 === n1) continue;
+    const key = [n0, n1].sort((a, b) => a.localeCompare(b)).join("|");
+    diodePairs.add(key);
+  }
+
+  for (const comp of ir.components) {
+    if (!/(relay|motor|solenoid|coil|inductor)/i.test(comp.type)) continue;
+    if (comp.pins.length < 2) continue;
+    const p0 = comp.pins[0]?.name;
+    const p1 = comp.pins[1]?.name;
+    if (!p0 || !p1) continue;
+    const n0 = firstNetForPin(comp.id, p0);
+    const n1 = firstNetForPin(comp.id, p1);
+    if (!n0 || !n1 || n0 === n1) continue;
+    const key = [n0, n1].sort((a, b) => a.localeCompare(b)).join("|");
+    if (!diodePairs.has(key)) {
+      diags.push({
+        file,
+        line: 1,
+        col: 1,
+        code: "E007",
+        message: `protection missing: '${comp.id}' (${comp.type}) has no flyback diode across nets '${n0}' and '${n1}'`
+      });
     }
   }
 
