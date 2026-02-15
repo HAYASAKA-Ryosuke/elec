@@ -36,6 +36,16 @@ Use this pattern:
 6. Connect nets with `connect(...)`
 7. Set I2C constraint with `setI2c(...)`
 8. Export `default c.toIR()`
+9. For reusable module libraries, mark non-required pins as `optional: true`
+
+Library-first recommendation:
+
+- Keep only primitives in core.
+- Put sensors/modules in external component libraries and import them.
+- Example imports in this repo:
+  - `component-libs/sensors-bosch.ts`
+  - `component-libs/modules-rp.ts`
+  - `component-libs/core-primitives.ts`
 
 See examples:
 
@@ -45,6 +55,14 @@ See examples:
 - `examples/minimal.scm`
 - `examples/pico_bme280_led.scm`
 - `examples/power_levelshift.scm`
+
+Example (external library style):
+
+```ts
+import { BME280 } from "../component-libs/sensors-bosch.js";
+import { Pico } from "../component-libs/modules-rp.js";
+import { Resistor } from "../component-libs/core-primitives.js";
+```
 
 ## DSL flow
 
@@ -99,6 +117,10 @@ What `lint` checks:
 - I2C pull-up presence on both SDA and SCL to VCC: `E003`
 - Short-circuit risk using pin roles (`gnd`, `power_in`, `power_out`) and net voltage: `E004`
 - Overvoltage risk using explicit net voltage vs pin `vmax`: `E005`
+
+Notes:
+
+- `E002` ignores pins explicitly marked `optional: true`.
 
 What is not checked yet:
 

@@ -36,6 +36,16 @@ TypeScriptファーストの回路DSLツールチェーンです。
 6. `connect(...)` でネット接続
 7. `setI2c(...)` でI2C制約を設定
 8. `export default c.toIR()` を出力
+9. 再利用ライブラリの未使用許容ピンは `optional: true` を付与
+
+ライブラリ運用の推奨:
+
+- core には基本プリミティブのみを置く
+- センサ/モジュールは外部コンポーネントライブラリ化して import する
+- このリポジトリ内の例:
+  - `component-libs/sensors-bosch.ts`
+  - `component-libs/modules-rp.ts`
+  - `component-libs/core-primitives.ts`
 
 サンプル:
 
@@ -45,6 +55,14 @@ TypeScriptファーストの回路DSLツールチェーンです。
 - `examples/minimal.scm`
 - `examples/pico_bme280_led.scm`
 - `examples/power_levelshift.scm`
+
+外部ライブラリ利用例:
+
+```ts
+import { BME280 } from "../component-libs/sensors-bosch.js";
+import { Pico } from "../component-libs/modules-rp.js";
+import { Resistor } from "../component-libs/core-primitives.js";
+```
 
 ## DSLフロー
 
@@ -86,6 +104,10 @@ TypeScriptファーストの回路DSLツールチェーンです。
 - SDA/SCL 両方の I2C プルアップ（対VCC）: `E003`
 - ピン役割（`gnd` / `power_in` / `power_out`）とネット電圧に基づく短絡リスク検出: `E004`
 - 明示的なネット電圧とピン `vmax` に基づく過電圧リスク検出: `E005`
+
+補足:
+
+- `E002` は `optional: true` が付いたピンを未接続エラーにしません。
 
 まだ検査しないこと:
 

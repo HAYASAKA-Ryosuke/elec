@@ -1,49 +1,12 @@
-import { defineCircuit, defineComponent } from "../src/index.js";
-
-const Bme280 = defineComponent({
-  kind: "IC",
-  name: "bme280",
-  pins: {
-    VCC: { role: "power_in", vmin: 1.71, vmax: 3.6 },
-    GND: { role: "gnd", vmin: 0, vmax: 0 },
-    SDA: { role: "io", vmin: 0, vmax: 3.6 },
-    SCL: { role: "io", vmin: 0, vmax: 3.6 }
-  }
-});
-
-const Mcu = defineComponent({
-  kind: "Module",
-  name: "pico",
-  pins: {
-    VCC: { role: "power_in", vmin: 1.8, vmax: 3.6 },
-    GND: { role: "gnd", vmin: 0, vmax: 0 },
-    I2C_SDA: { role: "io", vmin: 0, vmax: 3.6 },
-    I2C_SCL: { role: "io", vmin: 0, vmax: 3.6 }
-  }
-});
-
-const Resistor = defineComponent({
-  kind: "Passive",
-  name: "resistor",
-  pins: {
-    "1": {},
-    "2": {}
-  }
-});
-
-const Capacitor = defineComponent({
-  kind: "Passive",
-  name: "capacitor",
-  pins: {
-    "1": {},
-    "2": {}
-  }
-});
+import { Capacitor, Resistor } from "../component-libs/core-primitives.js";
+import { Pico } from "../component-libs/modules-rp.js";
+import { BME280 } from "../component-libs/sensors-bosch.js";
+import { defineCircuit } from "../src/index.js";
 
 const c = defineCircuit({ target: "pico" });
 
-const u1 = c.addPart(Mcu({ ref: "U_MCU" }));
-const u2 = c.addPart(Bme280({ ref: "U_BME280" }));
+const u1 = c.addPart(Pico({ ref: "U_MCU" }));
+const u2 = c.addPart(BME280({ ref: "U_BME280" }));
 const rSda = c.addPart(Resistor({ ref: "R_SDA" }));
 const rScl = c.addPart(Resistor({ ref: "R_SCL" }));
 const c1 = c.addPart(Capacitor({ ref: "C1" }));

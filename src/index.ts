@@ -7,6 +7,7 @@ export type PinSpec = {
   role?: PinRole;
   vmin?: number;
   vmax?: number;
+  optional?: boolean;
 };
 
 export type ComponentDef = {
@@ -42,7 +43,7 @@ export type CircuitIR = {
   components: Array<{
     id: string;
     type: string;
-    pins: Array<{ name: string; role?: PinRole; vmin?: number; vmax?: number }>;
+    pins: Array<{ name: string; role?: PinRole; vmin?: number; vmax?: number; optional?: boolean }>;
     props: Record<string, string>;
   }>;
   nets: NetDef[];
@@ -61,7 +62,8 @@ export function defineComponent<TDef extends ComponentDef>(def: TDef) {
       pinSpecs[pin] = {
         role: spec.role,
         vmin: spec.vmin,
-        vmax: spec.vmax
+        vmax: spec.vmax,
+        optional: spec.optional
       };
     }
     return {
@@ -123,7 +125,8 @@ export class CircuitBuilder {
         name,
         role: p.pinSpecs[name]?.role,
         vmin: p.pinSpecs[name]?.vmin,
-        vmax: p.pinSpecs[name]?.vmax
+        vmax: p.pinSpecs[name]?.vmax,
+        optional: p.pinSpecs[name]?.optional
       })),
       props: { ...p.props }
     }));

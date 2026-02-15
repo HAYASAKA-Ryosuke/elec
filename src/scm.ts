@@ -124,11 +124,11 @@ function stripZero(n: number): string {
   return n.toFixed(6).replace(/\.0+$/, "").replace(/(\.\d*?)0+$/, "$1");
 }
 
-function parsePinEntry(entry: SExpr): { name: string; role?: PinRole; vmin?: number; vmax?: number } {
+function parsePinEntry(entry: SExpr): { name: string; role?: PinRole; vmin?: number; vmax?: number; optional?: boolean } {
   const items = asList(entry);
   if (items.length === 0) parseError("empty pin entry", entry.pos);
   const name = asAtom(items[0]!);
-  const out: { name: string; role?: PinRole; vmin?: number; vmax?: number } = { name };
+  const out: { name: string; role?: PinRole; vmin?: number; vmax?: number; optional?: boolean } = { name };
 
   for (const kv of items.slice(1)) {
     const pair = asList(kv);
@@ -137,6 +137,7 @@ function parsePinEntry(entry: SExpr): { name: string; role?: PinRole; vmin?: num
     if (k === "role") out.role = v as PinRole;
     if (k === "vmin") out.vmin = Number(v);
     if (k === "vmax") out.vmax = Number(v);
+    if (k === "optional") out.optional = v === "true";
   }
 
   return out;
@@ -162,7 +163,7 @@ export function parseScm(input: string): CircuitIR {
         if (asAtom(ci[0]!) !== "comp") parseError("expected comp", c.pos);
         const id = asAtom(ci[1]!);
         let type = "part";
-        let pins: Array<{ name: string; role?: PinRole; vmin?: number; vmax?: number }> = [];
+        let pins: Array<{ name: string; role?: PinRole; vmin?: number; vmax?: number; optional?: boolean }> = [];
         const props: Record<string, string> = {};
 
         for (const prop of ci.slice(2)) {
@@ -247,11 +248,12 @@ export function parseScm(input: string): CircuitIR {
   return { components, nets, constraints: { i2c } };
 }
 
-function pinLine(pin: { name: string; role?: PinRole; vmin?: number; vmax?: number }): string {
+function pinLine(pin: { name: string; role?: PinRole; vmin?: number; vmax?: number; optional?: boolean }): string {
   const attrs: string[] = [];
   if (pin.role) attrs.push(`(role ${pin.role})`);
   if (pin.vmin !== undefined) attrs.push(`(vmin ${stripZero(pin.vmin)})`);
   if (pin.vmax !== undefined) attrs.push(`(vmax ${stripZero(pin.vmax)})`);
+  if (pin.optional) attrs.push("(optional true)");
   if (attrs.length === 0) return `        (${pin.name})`;
   return `        (${pin.name} ${attrs.join(" ")})`;
 }
@@ -343,6 +345,7 @@ export function lintScm(file: string, ir: CircuitIR): LintDiag[] {
 
   for (const comp of ir.components) {
     for (const pin of comp.pins) {
+      if (pin.optional) continue;
       const k = `${comp.id}.${pin.name}`;
       if (!connected.has(k)) {
         diags.push({ file, line: 1, col: 1, code: "E002", message: `unconnected pin '${k}'` });
