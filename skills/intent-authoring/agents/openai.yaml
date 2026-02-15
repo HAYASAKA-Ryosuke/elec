@@ -1,0 +1,3 @@
+display_name: Intent Authoring
+short_description: Create and validate intent.scm from requirements
+default_prompt: Convert product requirements into canonical intent.scm, check consistency against circuit.scm, and report assumptions.
