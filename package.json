@@ -1,0 +1,18 @@
+{
+  "name": "elec",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "check": "tsc -p tsconfig.json --noEmit",
+    "ts2scm": "node dist/src/cli.js ts2scm examples/minimal.ts -o examples/minimal.scm",
+    "fmt": "node dist/src/cli.js fmt examples/minimal.scm",
+    "fmt:check": "node dist/src/cli.js fmt --check examples/minimal.scm",
+    "lint": "node dist/src/cli.js lint examples/minimal.scm"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.10",
+    "typescript": "^5.8.2"
+  }
+}
