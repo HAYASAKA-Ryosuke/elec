@@ -2,6 +2,14 @@
 
 TypeScript-first circuit DSL toolchain.
 
+## Quick Start
+
+1. Install dependencies: `npm install`
+2. Build: `npm run build`
+3. Generate SCM from TS: `npm run ts2scm`
+4. Validate canonical form: `npm run fmt:check`
+5. Run semantic checks: `npm run lint`
+
 ## Commands
 
 - `npm run build`
@@ -9,12 +17,41 @@ TypeScript-first circuit DSL toolchain.
 - `npm run fmt` / `npm run fmt:check`
 - `npm run lint`
 
+## How To Write TS Circuit
+
+Use this pattern:
+
+1. Define components with `defineComponent(...)`
+2. Create circuit with `defineCircuit({ target: "pico" })`
+3. Add parts with `addPart(...)`
+4. Set values with `setPartProp(...)` (for resistors/capacitors etc.)
+5. Connect nets with `connect(...)`
+6. Set I2C constraint with `setI2c(...)`
+7. Export `default c.toIR()`
+
+See examples:
+
+- `examples/minimal.ts`
+- `examples/pico_bme280_led.ts`
+
 ## DSL flow
 
 1. Write circuit in TypeScript (`defineComponent`, `CircuitBuilder`)
 2. Export IR as default export
 3. Convert to canonical S-expression (`ts2scm`)
 4. Run `fmt` and `lint` as quality gates
+
+## After SCM Is Generated
+
+Recommended flow:
+
+1. Run `node dist/src/cli.js fmt --check <file.scm>`
+2. Run `node dist/src/cli.js lint <file.scm>`
+3. Commit both `*.ts` and `*.scm` together
+4. Let CI gate the PR with `build -> ts2scm -> fmt:check -> lint`
+
+If `fmt --check` fails, run `fmt` to rewrite canonical form.
+If `lint` fails, fix TS source and regenerate SCM.
 
 ## Lint rules
 
