@@ -93,7 +93,7 @@ import { Resistor } from "../component-libs/core-primitives.js";
 - `E003`: I2Cプルアップ欠落（SDA/SCL両方必須）
 - `E004`: 短絡リスク（同一ネットにGND系ピンと電源系ピンが混在）
 - `E005`: 過電圧リスク（ネット電圧がピン `vmax` を超過）
-- `E006`: トランジスタ/FETの向き・接続リスク
+- `E006`: 接続契約違反（汎用。トランジスタ/FET専用ではない）
 - `E007`: 接続部品不足（コンポーネント定義の `requires` 違反）
 
 ## 検証範囲（現状）
@@ -111,7 +111,7 @@ import { Resistor } from "../component-libs/core-primitives.js";
 - SDA/SCL 両方の I2C プルアップ（対VCC）: `E003`
 - ピン役割（`gnd` / `power_in` / `power_out`）とネット電圧に基づく短絡リスク検出: `E004`
 - 明示的なネット電圧とピン `vmax` に基づく過電圧リスク検出: `E005`
-- BJT/MOSFETのピン接続・向きリスク検出: `E006`
+- 汎用の接続契約（`net_role` / `lt` / `gt` / `neq`）違反検出: `E006`
 - コンポーネント定義の接続要件（`requires`）違反検出: `E007`
 
 補足:
