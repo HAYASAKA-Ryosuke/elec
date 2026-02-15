@@ -1,0 +1,3 @@
+display_name: TS Circuit DSL
+short_description: Author elec circuit DSL in TypeScript and validate generated scm
+default_prompt: Create or update a TypeScript circuit DSL file for elec, generate canonical scm, and validate with fmt/lint.

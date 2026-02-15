@@ -67,6 +67,9 @@ If `lint` fails, fix TS source and regenerate SCM.
 - Skill template for intent authoring is included at:
   - `skills/intent-authoring/SKILL.md`
   - `skills/intent-authoring/references/intent-template.scm`
+- Skill for TypeScript circuit DSL authoring is included at:
+  - `skills/ts-circuit-dsl/SKILL.md`
+  - `skills/ts-circuit-dsl/references/api-patterns.md`
 
 ## Lint rules
 
