@@ -1,4 +1,4 @@
-import type { CircuitIR, PinRole } from "./index.js";
+import type { CircuitIR, ComponentRequirement, PinRole } from "./index.js";
 
 type Pos = { line: number; col: number };
 type SExpr = { kind: "atom"; value: string; pos: Pos } | { kind: "list"; items: SExpr[]; pos: Pos };
@@ -203,6 +203,7 @@ export function parseScm(input: string): CircuitIR {
           notSameNetWith?: string[];
         }> = [];
         const props: Record<string, string> = {};
+        let requires: ComponentRequirement[] | undefined;
 
         for (const prop of ci.slice(2)) {
           const pi = asList(prop);
@@ -233,10 +234,47 @@ export function parseScm(input: string): CircuitIR {
               const pair = asList(kv);
               props[asAtom(pair[0]!)] = asAtom(pair[1]!);
             }
+            continue;
+          }
+
+          if (phead === "requires") {
+            const parsed: ComponentRequirement[] = [];
+            for (const req of pi.slice(1)) {
+              const ri = asList(req);
+              const kind = asAtom(ri[0]!);
+              if (kind === "component_on_net") {
+                const componentType = asAtom(ri[1]!);
+                const pin = asAtom(ri[2]!);
+                const maybeId = ri[3] ? asAtom(ri[3]) : undefined;
+                parsed.push({
+                  kind: "component_on_net",
+                  componentType,
+                  pin,
+                  id: maybeId
+                });
+                continue;
+              }
+              if (kind === "component_between_nets") {
+                const componentType = asAtom(ri[1]!);
+                const pinA = asAtom(ri[2]!);
+                const pinB = asAtom(ri[3]!);
+                const maybeId = ri[4] ? asAtom(ri[4]) : undefined;
+                parsed.push({
+                  kind: "component_between_nets",
+                  componentType,
+                  pinA,
+                  pinB,
+                  id: maybeId
+                });
+                continue;
+              }
+              parseError(`unknown requirement kind '${kind}'`, req.pos);
+            }
+            requires = parsed;
           }
         }
 
-        components.push({ id, type, pins, props });
+        components.push({ id, type, pins, requires, props });
       }
       continue;
     }
@@ -335,6 +373,24 @@ export function toScm(ir: CircuitIR): string {
       lines.push(`        (${key} ${value})`);
     }
     lines.push("      )");
+
+    if (c.requires && c.requires.length > 0) {
+      lines.push("      (requires");
+      const sortedReqs = [...c.requires].sort((a, b) => {
+        const ka = `${a.kind}:${a.componentType}:${"pin" in a ? a.pin : `${a.pinA}:${a.pinB}`}:${a.id ?? ""}`;
+        const kb = `${b.kind}:${b.componentType}:${"pin" in b ? b.pin : `${b.pinA}:${b.pinB}`}:${b.id ?? ""}`;
+        return ka.localeCompare(kb);
+      });
+      for (const req of sortedReqs) {
+        if (req.kind === "component_on_net") {
+          lines.push(`        (component_on_net ${req.componentType} ${req.pin}${req.id ? ` ${req.id}` : ""})`);
+        } else {
+          lines.push(`        (component_between_nets ${req.componentType} ${req.pinA} ${req.pinB}${req.id ? ` ${req.id}` : ""})`);
+        }
+      }
+      lines.push("      )");
+    }
+
     lines.push("    )");
   }
   lines.push("  )");
@@ -596,6 +652,64 @@ export function lintScm(file: string, ir: CircuitIR): LintDiag[] {
     }
   }
 
+  const componentMatchesType = (candidateType: string, target: string): boolean =>
+    candidateType.toLowerCase() === target.toLowerCase();
+  const componentTouchesNet = (candidate: CircuitIR["components"][number], netName: string): boolean =>
+    candidate.pins.some((p) => firstNetForPin(candidate.id, p.name) === netName);
+  const componentBridgesNets = (candidate: CircuitIR["components"][number], a: string, b: string): boolean => {
+    const nets = candidate.pins
+      .map((p) => firstNetForPin(candidate.id, p.name))
+      .filter((n): n is string => Boolean(n));
+    return nets.includes(a) && nets.includes(b) && a !== b;
+  };
+
+  for (const comp of ir.components) {
+    const reqs = comp.requires ?? [];
+    for (const req of reqs) {
+      if (req.kind === "component_on_net") {
+        const net = firstNetForPin(comp.id, req.pin);
+        if (!net) continue;
+        const ok = ir.components.some(
+          (other) =>
+            other.id !== comp.id &&
+            componentMatchesType(other.type, req.componentType) &&
+            componentTouchesNet(other, net)
+        );
+        if (!ok) {
+          diags.push({
+            file,
+            line: 1,
+            col: 1,
+            code: "E007",
+            message: `connection component missing [${req.id ?? "require"}]: '${comp.id}' requires '${req.componentType}' on net '${net}' (pin '${req.pin}')`
+          });
+        }
+        continue;
+      }
+
+      if (req.kind === "component_between_nets") {
+        const netA = firstNetForPin(comp.id, req.pinA);
+        const netB = firstNetForPin(comp.id, req.pinB);
+        if (!netA || !netB) continue;
+        const ok = ir.components.some(
+          (other) =>
+            other.id !== comp.id &&
+            componentMatchesType(other.type, req.componentType) &&
+            componentBridgesNets(other, netA, netB)
+        );
+        if (!ok) {
+          diags.push({
+            file,
+            line: 1,
+            col: 1,
+            code: "E007",
+            message: `connection component missing [${req.id ?? "require"}]: '${comp.id}' requires '${req.componentType}' between '${netA}' and '${netB}'`
+          });
+        }
+      }
+    }
+  }
+
   const diodePairs = new Set<string>();
   for (const comp of ir.components) {
     if (!/(diode|flyback|schottky|tvs)/i.test(comp.type)) continue;
@@ -626,7 +740,44 @@ export function lintScm(file: string, ir: CircuitIR): LintDiag[] {
         line: 1,
         col: 1,
         code: "E007",
-        message: `protection missing: '${comp.id}' (${comp.type}) has no flyback diode across nets '${n0}' and '${n1}'`
+        message: `connection component missing [flyback_diode]: '${comp.id}' (${comp.type}) has no flyback diode across nets '${n0}' and '${n1}'`
+      });
+    }
+  }
+
+  const resistors = ir.components.filter((c) => c.type.toLowerCase() === "resistor" && c.pins.length >= 2);
+  const hasSeriesResistorOnNet = (netName: string): boolean => {
+    for (const r of resistors) {
+      const nets = r.pins
+        .map((p) => firstNetForPin(r.id, p.name))
+        .filter((n): n is string => Boolean(n));
+      if (nets.length < 2) continue;
+      const unique = [...new Set(nets)];
+      if (unique.length < 2) continue;
+      if (unique.includes(netName)) return true;
+    }
+    return false;
+  };
+
+  for (const comp of ir.components) {
+    if (!/led/i.test(comp.type)) continue;
+    if (comp.props.builtin_resistor === "true") continue;
+    if (comp.pins.length < 2) continue;
+
+    const ledNets = comp.pins
+      .map((p) => firstNetForPin(comp.id, p.name))
+      .filter((n): n is string => Boolean(n));
+    const uniqueLedNets = [...new Set(ledNets)];
+    if (uniqueLedNets.length < 2) continue;
+
+    const hasSeries = uniqueLedNets.some((n) => hasSeriesResistorOnNet(n));
+    if (!hasSeries) {
+      diags.push({
+        file,
+        line: 1,
+        col: 1,
+        code: "E007",
+        message: `connection component missing [led_series_resistor]: '${comp.id}' (${comp.type}) has no detected series resistor`
       });
     }
   }

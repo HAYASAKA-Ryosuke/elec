@@ -40,6 +40,11 @@ Use this pattern:
 
 Library-first recommendation:
 
+Package-side requirement definition:
+
+- Components can declare `requires` (e.g., pull-up resistor, decoupling capacitor).
+- `lint` enforces these and reports `E007` if missing.
+
 - Keep only primitives in core.
 - Put sensors/modules in external component libraries and import them.
 - Example imports in this repo:
@@ -102,7 +107,7 @@ If `lint` fails, fix TS source and regenerate SCM.
 - `E004`: short-circuit risk (ground pins + power pins on same net)
 - `E005`: overvoltage risk (net voltage exceeds pin `vmax`)
 - `E006`: transistor/FET orientation or connection risk
-- `E007`: missing flyback diode for inductive load
+- `E007`: connection component missing (currently flyback diode and LED series resistor checks)
 
 ## Validation Scope (Current)
 
@@ -120,12 +125,13 @@ What `lint` checks:
 - Short-circuit risk using pin roles (`gnd`, `power_in`, `power_out`) and net voltage: `E004`
 - Overvoltage risk using explicit net voltage vs pin `vmax`: `E005`
 - Orientation/connection risk for BJT/MOSFET pin usage: `E006`
-- Missing protection diode for relay/motor/solenoid/inductor paths: `E007`
+- Connection-component checks (subtypes): flyback diode and LED series resistor: `E007`
 
 Notes:
 
 - `E002` ignores pins explicitly marked `optional: true`.
 - `E006` is contract-based (pin constraints like `net_role`, `lt`, `gt`, `neq`), not name-pattern based.
+- `E007` includes subtype tags in diagnostics, e.g. `[flyback_diode]`, `[led_series_resistor]`.
 
 What is not checked yet:
 

@@ -40,6 +40,11 @@
       )
       (props
       )
+      (requires
+        (component_between_nets capacitor VCC GND decoupling_cap)
+        (component_between_nets resistor SCL VCC scl_pullup)
+        (component_between_nets resistor SDA VCC sda_pullup)
+      )
     )
     (comp U_MCU
       (type pico)

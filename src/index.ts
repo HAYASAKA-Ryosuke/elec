@@ -15,10 +15,28 @@ export type PinSpec = {
   notSameNetWith?: string[];
 };
 
+export type ComponentRequirement =
+  | {
+      kind: "component_on_net";
+      id?: string;
+      pin: string;
+      componentType: string;
+      note?: string;
+    }
+  | {
+      kind: "component_between_nets";
+      id?: string;
+      pinA: string;
+      pinB: string;
+      componentType: string;
+      note?: string;
+    };
+
 export type ComponentDef = {
   kind: string;
   name: string;
   pins: Record<PinName, PinSpec & { func?: string | readonly string[] }>;
+  requires?: ComponentRequirement[];
 };
 
 export type Part = {
@@ -26,6 +44,7 @@ export type Part = {
   type: string;
   props: Record<string, string>;
   pinSpecs: Record<PinName, PinSpec>;
+  requires: ComponentRequirement[];
   pins: Record<PinName, { partRef: string; pin: string }>;
 };
 
@@ -60,6 +79,7 @@ export type CircuitIR = {
       higherThan?: string[];
       notSameNetWith?: string[];
     }>;
+    requires?: ComponentRequirement[];
     props: Record<string, string>;
   }>;
   nets: NetDef[];
@@ -92,6 +112,7 @@ export function defineComponent<TDef extends ComponentDef>(def: TDef) {
       type: def.name,
       props: {},
       pinSpecs,
+      requires: def.requires ? [...def.requires] : [],
       pins
     };
   };
@@ -154,6 +175,7 @@ export class CircuitBuilder {
         higherThan: p.pinSpecs[name]?.higherThan ? [...(p.pinSpecs[name]?.higherThan ?? [])] : undefined,
         notSameNetWith: p.pinSpecs[name]?.notSameNetWith ? [...(p.pinSpecs[name]?.notSameNetWith ?? [])] : undefined
       })),
+      requires: p.requires ? [...p.requires] : undefined,
       props: { ...p.props }
     }));
 
