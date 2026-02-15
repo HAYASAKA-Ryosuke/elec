@@ -76,3 +76,25 @@ If `lint` fails, fix TS source and regenerate SCM.
 - `E001`: undefined component/pin/net reference
 - `E002`: unconnected pin
 - `E003`: missing I2C pull-up (both SDA and SCL required)
+
+## Validation Scope (Current)
+
+What `fmt` does:
+
+- Parses supported circuit S-expression and rewrites to canonical order.
+- Normalizes known resistor/capacitor unit formats.
+- Produces deterministic canonical output for identical input.
+
+What `lint` checks:
+
+- Reference consistency (component/pin/net existence): `E001`
+- Unconnected pins: `E002`
+- I2C pull-up presence on both SDA and SCL to VCC: `E003`
+
+What is not checked yet:
+
+- Electrical validity beyond current rules (current limits, timing, SI/PI)
+- Voltage/domain compatibility rules
+- Footprint/package validity and PCB manufacturability
+- Runtime firmware correctness
+- Advanced bus semantics (I2C address conflicts, SPI/UART protocol constraints)
