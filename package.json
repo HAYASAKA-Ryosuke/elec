@@ -9,7 +9,9 @@
     "ts2scm": "node dist/src/cli.js ts2scm examples/minimal.ts -o examples/minimal.scm",
     "fmt": "node dist/src/cli.js fmt examples/minimal.scm",
     "fmt:check": "node dist/src/cli.js fmt --check examples/minimal.scm",
-    "lint": "node dist/src/cli.js lint examples/minimal.scm"
+    "lint": "node dist/src/cli.js lint examples/minimal.scm",
+    "generate:pico": "node dist/src/cli.js generate --target pico --input examples/pico_bme280_led.scm --out-dir out/pico_bme280_led",
+    "check:all": "npm run build && npm run ts2scm && npm run fmt:check && npm run lint"
   },
   "devDependencies": {
     "@types/node": "^22.13.10",

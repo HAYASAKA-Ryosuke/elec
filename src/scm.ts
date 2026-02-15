@@ -1,4 +1,4 @@
-import type { CircuitIR } from "./index.js";
+import type { CircuitIR, PinRole } from "./index.js";
 
 type Pos = { line: number; col: number };
 type SExpr = { kind: "atom"; value: string; pos: Pos } | { kind: "list"; items: SExpr[]; pos: Pos };
@@ -124,6 +124,24 @@ function stripZero(n: number): string {
   return n.toFixed(6).replace(/\.0+$/, "").replace(/(\.\d*?)0+$/, "$1");
 }
 
+function parsePinEntry(entry: SExpr): { name: string; role?: PinRole; vmin?: number; vmax?: number } {
+  const items = asList(entry);
+  if (items.length === 0) parseError("empty pin entry", entry.pos);
+  const name = asAtom(items[0]!);
+  const out: { name: string; role?: PinRole; vmin?: number; vmax?: number } = { name };
+
+  for (const kv of items.slice(1)) {
+    const pair = asList(kv);
+    const k = asAtom(pair[0]!);
+    const v = asAtom(pair[1]!);
+    if (k === "role") out.role = v as PinRole;
+    if (k === "vmin") out.vmin = Number(v);
+    if (k === "vmax") out.vmax = Number(v);
+  }
+
+  return out;
+}
+
 export function parseScm(input: string): CircuitIR {
   const tokens = tokenize(input);
   const root = parseOne(tokens, { v: 0 });
@@ -137,20 +155,40 @@ export function parseScm(input: string): CircuitIR {
   for (const sec of rootItems.slice(1)) {
     const items = asList(sec);
     const head = asAtom(items[0]!);
+
     if (head === "components") {
       for (const c of items.slice(1)) {
         const ci = asList(c);
         if (asAtom(ci[0]!) !== "comp") parseError("expected comp", c.pos);
         const id = asAtom(ci[1]!);
         let type = "part";
-        let pins: string[] = [];
+        let pins: Array<{ name: string; role?: PinRole; vmin?: number; vmax?: number }> = [];
         const props: Record<string, string> = {};
 
         for (const prop of ci.slice(2)) {
           const pi = asList(prop);
           const phead = asAtom(pi[0]!);
-          if (phead === "type") type = asAtom(pi[1]!);
-          if (phead === "pins") pins = asList(pi[1]!).map(asAtom);
+          if (phead === "type") {
+            type = asAtom(pi[1]!);
+            continue;
+          }
+
+          if (phead === "pins") {
+            if (pi.length === 2 && pi[1]?.kind === "list") {
+              // Legacy style: (pins (A B C))
+              const maybeFlat = asList(pi[1]!);
+              if (maybeFlat.every((x) => x.kind === "atom")) {
+                pins = maybeFlat.map((x) => ({ name: asAtom(x) }));
+              } else {
+                pins = maybeFlat.map(parsePinEntry);
+              }
+            } else {
+              // Canonical style: (pins (A ...) (B ...) ...)
+              pins = pi.slice(1).map(parsePinEntry);
+            }
+            continue;
+          }
+
           if (phead === "props") {
             for (const kv of pi.slice(1)) {
               const pair = asList(kv);
@@ -161,21 +199,37 @@ export function parseScm(input: string): CircuitIR {
 
         components.push({ id, type, pins, props });
       }
+      continue;
     }
+
     if (head === "nets") {
       for (const n of items.slice(1)) {
         const ni = asList(n);
         if (asAtom(ni[0]!) !== "net") parseError("expected net", n.pos);
         const name = asAtom(ni[1]!);
-        const connSec = asList(ni[2]!);
-        if (asAtom(connSec[0]!) !== "connect") parseError("expected connect", n.pos);
-        const connect = connSec.slice(1).map((x) => {
-          const pair = asList(x);
-          return { comp: asAtom(pair[0]!), pin: asAtom(pair[1]!) };
-        });
-        nets.push({ name, connect });
+        let voltage: number | undefined;
+        let connect: Array<{ comp: string; pin: string }> = [];
+
+        for (const sec2 of ni.slice(2)) {
+          const si = asList(sec2);
+          const sh = asAtom(si[0]!);
+          if (sh === "voltage") {
+            voltage = Number(asAtom(si[1]!));
+            continue;
+          }
+          if (sh === "connect") {
+            connect = si.slice(1).map((x) => {
+              const pair = asList(x);
+              return { comp: asAtom(pair[0]!), pin: asAtom(pair[1]!) };
+            });
+          }
+        }
+
+        nets.push({ name, voltage, connect });
       }
+      continue;
     }
+
     if (head === "constraints") {
       for (const c of items.slice(1)) {
         const ci = asList(c);
@@ -193,6 +247,15 @@ export function parseScm(input: string): CircuitIR {
   return { components, nets, constraints: { i2c } };
 }
 
+function pinLine(pin: { name: string; role?: PinRole; vmin?: number; vmax?: number }): string {
+  const attrs: string[] = [];
+  if (pin.role) attrs.push(`(role ${pin.role})`);
+  if (pin.vmin !== undefined) attrs.push(`(vmin ${stripZero(pin.vmin)})`);
+  if (pin.vmax !== undefined) attrs.push(`(vmax ${stripZero(pin.vmax)})`);
+  if (attrs.length === 0) return `        (${pin.name})`;
+  return `        (${pin.name} ${attrs.join(" ")})`;
+}
+
 export function toScm(ir: CircuitIR): string {
   const lines: string[] = [];
   lines.push("(circuit");
@@ -202,8 +265,12 @@ export function toScm(ir: CircuitIR): string {
   for (const c of components) {
     lines.push(`    (comp ${c.id}`);
     lines.push(`      (type ${c.type})`);
-    const pins = [...c.pins].sort((a, b) => a.localeCompare(b));
-    lines.push(`      (pins (${pins.join(" ")}))`);
+
+    const pins = [...c.pins].sort((a, b) => a.name.localeCompare(b.name));
+    lines.push("      (pins");
+    for (const p of pins) lines.push(pinLine(p));
+    lines.push("      )");
+
     lines.push("      (props");
     for (const key of Object.keys(c.props).sort((a, b) => a.localeCompare(b))) {
       let value = c.props[key] ?? "";
@@ -220,6 +287,7 @@ export function toScm(ir: CircuitIR): string {
   lines.push("  (nets");
   for (const n of nets) {
     lines.push(`    (net ${n.name}`);
+    if (n.voltage !== undefined) lines.push(`      (voltage ${stripZero(n.voltage)})`);
     lines.push("      (connect");
     const conns = [...n.connect].sort((a, b) => a.comp.localeCompare(b.comp) || a.pin.localeCompare(b.pin));
     for (const c of conns) {
@@ -245,6 +313,8 @@ export function toScm(ir: CircuitIR): string {
 
 export type LintDiag = { file: string; line: number; col: number; code: string; message: string };
 
+const EPS = 1e-9;
+
 export function lintScm(file: string, ir: CircuitIR): LintDiag[] {
   const diags: LintDiag[] = [];
 
@@ -259,7 +329,7 @@ export function lintScm(file: string, ir: CircuitIR): LintDiag[] {
         diags.push({ file, line: 1, col: 1, code: "E001", message: `undefined component '${c.comp}'` });
         continue;
       }
-      if (!comp.pins.includes(c.pin)) {
+      if (!comp.pins.some((p) => p.name === c.pin)) {
         diags.push({ file, line: 1, col: 1, code: "E001", message: `undefined pin '${c.comp}.${c.pin}'` });
         continue;
       }
@@ -273,7 +343,7 @@ export function lintScm(file: string, ir: CircuitIR): LintDiag[] {
 
   for (const comp of ir.components) {
     for (const pin of comp.pins) {
-      const k = `${comp.id}.${pin}`;
+      const k = `${comp.id}.${pin.name}`;
       if (!connected.has(k)) {
         diags.push({ file, line: 1, col: 1, code: "E002", message: `unconnected pin '${k}'` });
       }
@@ -295,8 +365,8 @@ export function lintScm(file: string, ir: CircuitIR): LintDiag[] {
     for (const comp of ir.components) {
       if (comp.type !== "resistor" || comp.pins.length !== 2) continue;
       const [p0, p1] = comp.pins;
-      const n0 = pinNets.get(`${comp.id}.${p0}`) ?? new Set<string>();
-      const n1 = pinNets.get(`${comp.id}.${p1}`) ?? new Set<string>();
+      const n0 = pinNets.get(`${comp.id}.${p0?.name ?? ""}`) ?? new Set<string>();
+      const n1 = pinNets.get(`${comp.id}.${p1?.name ?? ""}`) ?? new Set<string>();
 
       const isPullup = (signal: string): boolean =>
         (n0.has(signal) && n1.has(i2c.vcc)) || (n1.has(signal) && n0.has(i2c.vcc));
@@ -307,6 +377,55 @@ export function lintScm(file: string, ir: CircuitIR): LintDiag[] {
 
     if (!sdaOk) diags.push({ file, line: 1, col: 1, code: "E003", message: `missing pull-up resistor between '${i2c.sda}' and '${i2c.vcc}'` });
     if (!sclOk) diags.push({ file, line: 1, col: 1, code: "E003", message: `missing pull-up resistor between '${i2c.scl}' and '${i2c.vcc}'` });
+  }
+
+  for (const net of ir.nets) {
+    const roles = new Set<string>();
+    for (const conn of net.connect) {
+      const comp = compMap.get(conn.comp);
+      const pin = comp?.pins.find((p) => p.name === conn.pin);
+      if (pin?.role) roles.add(pin.role);
+    }
+
+    if (roles.has("gnd") && (roles.has("power_in") || roles.has("power_out"))) {
+      diags.push({
+        file,
+        line: 1,
+        col: 1,
+        code: "E004",
+        message: `short-circuit risk: net '${net.name}' mixes ground and power roles`
+      });
+      continue;
+    }
+
+    if (net.voltage !== undefined && net.voltage > 0.2 && roles.has("gnd")) {
+      diags.push({
+        file,
+        line: 1,
+        col: 1,
+        code: "E004",
+        message: `short-circuit risk: net '${net.name}' has voltage=${net.voltage}V but includes ground-role pin`
+      });
+    }
+  }
+
+  for (const net of ir.nets) {
+    if (net.voltage === undefined) continue;
+    for (const conn of net.connect) {
+      const comp = compMap.get(conn.comp);
+      const pin = comp?.pins.find((p) => p.name === conn.pin);
+      if (!pin) continue;
+
+      if (pin.vmax !== undefined && net.voltage > pin.vmax + EPS) {
+        diags.push({
+          file,
+          line: 1,
+          col: 1,
+          code: "E005",
+          message: `overvoltage risk: '${conn.comp}.${conn.pin}' vmax=${pin.vmax}V but net '${net.name}' is ${net.voltage}V`
+        });
+      }
+    }
   }
 
   diags.sort((a, b) =>

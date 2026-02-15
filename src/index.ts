@@ -1,17 +1,25 @@
 export type Target = "arduino" | "esp32" | "pico" | "m5stack";
 
 export type PinName = string;
+export type PinRole = "io" | "gnd" | "power_in" | "power_out";
+
+export type PinSpec = {
+  role?: PinRole;
+  vmin?: number;
+  vmax?: number;
+};
 
 export type ComponentDef = {
   kind: string;
   name: string;
-  pins: Record<PinName, { func?: string | readonly string[] }>;
+  pins: Record<PinName, PinSpec & { func?: string | readonly string[] }>;
 };
 
 export type Part = {
   ref: string;
   type: string;
   props: Record<string, string>;
+  pinSpecs: Record<PinName, PinSpec>;
   pins: Record<PinName, { partRef: string; pin: string }>;
 };
 
@@ -19,6 +27,7 @@ export type NetConn = { comp: string; pin: string };
 
 export type NetDef = {
   name: string;
+  voltage?: number;
   connect: NetConn[];
 };
 
@@ -33,7 +42,7 @@ export type CircuitIR = {
   components: Array<{
     id: string;
     type: string;
-    pins: string[];
+    pins: Array<{ name: string; role?: PinRole; vmin?: number; vmax?: number }>;
     props: Record<string, string>;
   }>;
   nets: NetDef[];
@@ -45,13 +54,21 @@ export type CircuitIR = {
 export function defineComponent<TDef extends ComponentDef>(def: TDef) {
   return function createPart(args: { ref: string }): Part {
     const pins: Part["pins"] = {};
+    const pinSpecs: Part["pinSpecs"] = {};
     for (const pin of Object.keys(def.pins)) {
       pins[pin] = { partRef: args.ref, pin };
+      const spec = def.pins[pin] ?? {};
+      pinSpecs[pin] = {
+        role: spec.role,
+        vmin: spec.vmin,
+        vmax: spec.vmax
+      };
     }
     return {
       ref: args.ref,
       type: def.name,
       props: {},
+      pinSpecs,
       pins
     };
   };
@@ -60,6 +77,7 @@ export function defineComponent<TDef extends ComponentDef>(def: TDef) {
 export class CircuitBuilder {
   private readonly parts: Part[] = [];
   private readonly nets = new Map<string, NetConn[]>();
+  private readonly netVoltages = new Map<string, number>();
   private i2c?: I2cConstraint;
 
   constructor(private readonly target?: Target) {}
@@ -90,17 +108,29 @@ export class CircuitBuilder {
     this.i2c = i2c;
   }
 
+  setNetVoltage(net: string, voltage: number): void {
+    if (!this.nets.has(net)) {
+      this.nets.set(net, []);
+    }
+    this.netVoltages.set(net, voltage);
+  }
+
   toIR(): CircuitIR {
     const components = this.parts.map((p) => ({
       id: p.ref,
       type: p.type.toLowerCase(),
-      pins: Object.keys(p.pins),
+      pins: Object.keys(p.pins).map((name) => ({
+        name,
+        role: p.pinSpecs[name]?.role,
+        vmin: p.pinSpecs[name]?.vmin,
+        vmax: p.pinSpecs[name]?.vmax
+      })),
       props: { ...p.props }
     }));
 
     const nets: NetDef[] = [];
     for (const [name, connect] of this.nets) {
-      nets.push({ name, connect: [...connect] });
+      nets.push({ name, voltage: this.netVoltages.get(name), connect: [...connect] });
     }
 
     return {

@@ -2,40 +2,60 @@
   (components
     (comp C1
       (type capacitor)
-      (pins (1 2))
+      (pins
+        (1)
+        (2)
+      )
       (props
         (value 100nF)
       )
     )
     (comp R_SCL
       (type resistor)
-      (pins (1 2))
+      (pins
+        (1)
+        (2)
+      )
       (props
         (value 4.7kΩ)
       )
     )
     (comp R_SDA
       (type resistor)
-      (pins (1 2))
+      (pins
+        (1)
+        (2)
+      )
       (props
         (value 4.7kΩ)
       )
     )
     (comp U_BME280
       (type bme280)
-      (pins (GND SCL SDA VCC))
+      (pins
+        (GND (role gnd) (vmin 0) (vmax 0))
+        (SCL (role io) (vmin 0) (vmax 3.6))
+        (SDA (role io) (vmin 0) (vmax 3.6))
+        (VCC (role power_in) (vmin 1.71) (vmax 3.6))
+      )
       (props
       )
     )
     (comp U_MCU
       (type pico)
-      (pins (GND I2C_SCL I2C_SDA VCC))
+      (pins
+        (GND (role gnd) (vmin 0) (vmax 0))
+        (I2C_SCL (role io) (vmin 0) (vmax 3.6))
+        (I2C_SDA (role io) (vmin 0) (vmax 3.6))
+        (VCC (role power_in) (vmin 1.8) (vmax 3.6))
+      )
       (props
       )
     )
   )
   (nets
     (net GND
+      (voltage 0)
       (connect
         (C1 2)
         (U_BME280 GND)
@@ -57,6 +77,7 @@
       )
     )
     (net VCC_3V3
+      (voltage 3.3)
       (connect
         (C1 1)
         (R_SCL 2)

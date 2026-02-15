@@ -16,6 +16,8 @@ TypeScript-first circuit DSL toolchain.
 - `npm run ts2scm` (generates `examples/minimal.scm` from `examples/minimal.ts`)
 - `npm run fmt` / `npm run fmt:check`
 - `npm run lint`
+- `npm run generate:pico` (from `examples/pico_bme280_led.scm` to `out/pico_bme280_led/`)
+- `npm run check:all`
 - Arbitrary TS -> SCM:
   - `node dist/src/cli.js ts2scm examples/pico_bme280_led.ts -o examples/pico_bme280_led.scm`
 - Arbitrary SCM checks:
@@ -30,16 +32,19 @@ Use this pattern:
 2. Create circuit with `defineCircuit({ target: "pico" })`
 3. Add parts with `addPart(...)`
 4. Set values with `setPartProp(...)` (for resistors/capacitors etc.)
-5. Connect nets with `connect(...)`
-6. Set I2C constraint with `setI2c(...)`
-7. Export `default c.toIR()`
+5. Define net voltage with `setNetVoltage(...)` when known (recommended)
+6. Connect nets with `connect(...)`
+7. Set I2C constraint with `setI2c(...)`
+8. Export `default c.toIR()`
 
 See examples:
 
 - `examples/minimal.ts`
 - `examples/pico_bme280_led.ts`
+- `examples/power_levelshift.ts` (LDO + boost + level shifter)
 - `examples/minimal.scm`
 - `examples/pico_bme280_led.scm`
+- `examples/power_levelshift.scm`
 
 ## DSL flow
 
@@ -76,6 +81,8 @@ If `lint` fails, fix TS source and regenerate SCM.
 - `E001`: undefined component/pin/net reference
 - `E002`: unconnected pin
 - `E003`: missing I2C pull-up (both SDA and SCL required)
+- `E004`: short-circuit risk (ground pins + power pins on same net)
+- `E005`: overvoltage risk (net voltage exceeds pin `vmax`)
 
 ## Validation Scope (Current)
 
@@ -90,11 +97,13 @@ What `lint` checks:
 - Reference consistency (component/pin/net existence): `E001`
 - Unconnected pins: `E002`
 - I2C pull-up presence on both SDA and SCL to VCC: `E003`
+- Short-circuit risk using pin roles (`gnd`, `power_in`, `power_out`) and net voltage: `E004`
+- Overvoltage risk using explicit net voltage vs pin `vmax`: `E005`
 
 What is not checked yet:
 
-- Electrical validity beyond current rules (current limits, timing, SI/PI)
-- Voltage/domain compatibility rules
+- Full electrical validity (current limits, timing, SI/PI)
+- Complete ERC-grade voltage/domain compatibility (current checks require explicit `setNetVoltage` and pin ranges)
 - Footprint/package validity and PCB manufacturability
 - Runtime firmware correctness
 - Advanced bus semantics (I2C address conflicts, SPI/UART protocol constraints)

@@ -77,8 +77,8 @@ function renderPicoMainPy(ir: CircuitIR): string {
   const sdaNet = ir.constraints.i2c?.sda ?? "I2C_SDA";
   const sclNet = ir.constraints.i2c?.scl ?? "I2C_SCL";
 
-  const picoSdaPinName = pico?.pins.includes("I2C_SDA") ? "I2C_SDA" : "<SET_GPIO_PIN>";
-  const picoSclPinName = pico?.pins.includes("I2C_SCL") ? "I2C_SCL" : "<SET_GPIO_PIN>";
+  const picoSdaPinName = pico?.pins.some((p) => p.name === "I2C_SDA") ? "I2C_SDA" : "<SET_GPIO_PIN>";
+  const picoSclPinName = pico?.pins.some((p) => p.name === "I2C_SCL") ? "I2C_SCL" : "<SET_GPIO_PIN>";
 
   const ledNet = pico ? findNetForPin(netMap, pico.id, "LED_GPIO") : undefined;
   const hasLed = Boolean(ledNet);

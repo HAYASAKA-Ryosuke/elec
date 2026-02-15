@@ -16,6 +16,8 @@ TypeScriptファーストの回路DSLツールチェーンです。
 - `npm run ts2scm`（`examples/minimal.ts` から `examples/minimal.scm` を生成）
 - `npm run fmt` / `npm run fmt:check`
 - `npm run lint`
+- `npm run generate:pico`（`examples/pico_bme280_led.scm` から `out/pico_bme280_led/` を生成）
+- `npm run check:all`
 - 任意TS -> SCM:
   - `node dist/src/cli.js ts2scm examples/pico_bme280_led.ts -o examples/pico_bme280_led.scm`
 - 任意SCMの検証:
@@ -30,16 +32,19 @@ TypeScriptファーストの回路DSLツールチェーンです。
 2. `defineCircuit({ target: "pico" })` で回路を作成
 3. `addPart(...)` で部品インスタンスを追加
 4. `setPartProp(...)` で抵抗値・容量値などを設定
-5. `connect(...)` でネット接続
-6. `setI2c(...)` でI2C制約を設定
-7. `export default c.toIR()` を出力
+5. 可能なら `setNetVoltage(...)` でネット電圧を設定
+6. `connect(...)` でネット接続
+7. `setI2c(...)` でI2C制約を設定
+8. `export default c.toIR()` を出力
 
 サンプル:
 
 - `examples/minimal.ts`
 - `examples/pico_bme280_led.ts`
+- `examples/power_levelshift.ts`（LDO + 昇圧 + レベルシフタ）
 - `examples/minimal.scm`
 - `examples/pico_bme280_led.scm`
+- `examples/power_levelshift.scm`
 
 ## DSLフロー
 
@@ -63,6 +68,8 @@ TypeScriptファーストの回路DSLツールチェーンです。
 - `E001`: 未定義参照（component/pin/net）
 - `E002`: 未接続ピン
 - `E003`: I2Cプルアップ欠落（SDA/SCL両方必須）
+- `E004`: 短絡リスク（同一ネットにGND系ピンと電源系ピンが混在）
+- `E005`: 過電圧リスク（ネット電圧がピン `vmax` を超過）
 
 ## 検証範囲（現状）
 
@@ -77,11 +84,13 @@ TypeScriptファーストの回路DSLツールチェーンです。
 - 参照整合性（component/pin/net の存在）: `E001`
 - 未接続ピン: `E002`
 - SDA/SCL 両方の I2C プルアップ（対VCC）: `E003`
+- ピン役割（`gnd` / `power_in` / `power_out`）とネット電圧に基づく短絡リスク検出: `E004`
+- 明示的なネット電圧とピン `vmax` に基づく過電圧リスク検出: `E005`
 
 まだ検査しないこと:
 
 - 現在ルール外の電気的妥当性（電流、タイミング、SI/PI）
-- 電圧ドメイン互換
+- ERC相当の完全な電圧ドメイン互換チェック（現状は `setNetVoltage` と `vmin/vmax` 指定前提）
 - フットプリント妥当性や製造性
 - ファームウェア実行時の正しさ
 - 高度なバス制約（I2Cアドレス競合、SPI/UARTプロトコル整合）

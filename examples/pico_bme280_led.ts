@@ -4,12 +4,12 @@ const Pico = defineComponent({
   kind: "Module",
   name: "pico",
   pins: {
-    VCC: {},
-    GND: {},
-    I2C_SDA: {},
-    I2C_SCL: {},
-    LED_GPIO: {},
-    RUN: {}
+    VCC: { role: "power_in", vmin: 1.8, vmax: 3.6 },
+    GND: { role: "gnd", vmin: 0, vmax: 0 },
+    I2C_SDA: { role: "io", vmin: 0, vmax: 3.6 },
+    I2C_SCL: { role: "io", vmin: 0, vmax: 3.6 },
+    LED_GPIO: { role: "io", vmin: 0, vmax: 3.6 },
+    RUN: { role: "io", vmin: 0, vmax: 3.6 }
   }
 });
 
@@ -17,10 +17,10 @@ const Bme280 = defineComponent({
   kind: "IC",
   name: "bme280",
   pins: {
-    VCC: {},
-    GND: {},
-    SDA: {},
-    SCL: {}
+    VCC: { role: "power_in", vmin: 1.71, vmax: 3.6 },
+    GND: { role: "gnd", vmin: 0, vmax: 0 },
+    SDA: { role: "io", vmin: 0, vmax: 3.6 },
+    SCL: { role: "io", vmin: 0, vmax: 3.6 }
   }
 });
 
@@ -85,6 +85,11 @@ c.connect("I2C_SCL", uPico.pins.I2C_SCL, uBme.pins.SCL, rScl.pins["1"]);
 c.connect("LED_SIG", uPico.pins.LED_GPIO, rLed.pins["1"]);
 c.connect("LED_ANODE", rLed.pins["2"], d1.pins.A);
 c.connect("RUN", uPico.pins.RUN, swReset.pins["1"], rRun.pins["1"]);
+ c.setNetVoltage("VCC_3V3", 3.3);
+ c.setNetVoltage("GND", 0);
+ c.setNetVoltage("RUN", 3.3);
+ c.setNetVoltage("LED_SIG", 3.3);
+ c.setNetVoltage("LED_ANODE", 3.3);
 
 c.setI2c({
   sda: "I2C_SDA",

@@ -1,13 +1,14 @@
-import { access, readFile, writeFile } from "node:fs/promises";
+import { access, mkdir, readFile, writeFile } from "node:fs/promises";
 import { constants } from "node:fs";
-import { resolve, relative } from "node:path";
+import { join, resolve, relative } from "node:path";
 import { pathToFileURL } from "node:url";
 
+import { generateForPico } from "./generate.js";
 import type { CircuitIR } from "./index.js";
 import { lintScm, parseScmSafe, toScm } from "./scm.js";
 
 function usage(): void {
-  console.error("Usage:\n  elec ts2scm <input.ts|.js> -o <output.scm>\n  elec fmt [--check] <files...>\n  elec lint <files...>");
+  console.error("Usage:\n  elec ts2scm <input.ts|.js> -o <output.scm>\n  elec fmt [--check] <files...>\n  elec lint <files...>\n  elec generate --target pico --input <circuit.scm> --out-dir <dir>");
 }
 
 async function exists(p: string): Promise<boolean> {
@@ -115,6 +116,63 @@ async function cmdLint(args: string[]): Promise<number> {
   return 1;
 }
 
+async function cmdGenerate(args: string[]): Promise<number> {
+  let target = "";
+  let input = "";
+  let outDir = "";
+
+  for (let i = 0; i < args.length; i += 1) {
+    const arg = args[i];
+    const next = args[i + 1] ?? "";
+    if (arg === "--target") {
+      target = next;
+      i += 1;
+      continue;
+    }
+    if (arg === "--input") {
+      input = next;
+      i += 1;
+      continue;
+    }
+    if (arg === "--out-dir") {
+      outDir = next;
+      i += 1;
+      continue;
+    }
+  }
+
+  if (!target || !input || !outDir) {
+    return 2;
+  }
+  if (target !== "pico") {
+    console.error(`E000: unsupported target '${target}'`);
+    return 2;
+  }
+
+  const inputText = await readFile(input, "utf8");
+  const parsed = parseScmSafe(inputText);
+  if (!parsed.ok) {
+    console.error(`${input}:${parsed.error.pos.line}:${parsed.error.pos.col}: E000: parse error: ${parsed.error.message}`);
+    return 2;
+  }
+
+  const lint = lintScm(input, parsed.value);
+  if (lint.length > 0) {
+    for (const d of lint) {
+      console.error(`${d.file}:${d.line}:${d.col}: ${d.code}: ${d.message}`);
+    }
+    console.error("E000: generation aborted because lint failed");
+    return 1;
+  }
+
+  const files = generateForPico(parsed.value);
+  await mkdir(outDir, { recursive: true });
+  for (const f of files) {
+    await writeFile(join(outDir, f.path), f.content, "utf8");
+  }
+  return 0;
+}
+
 async function main(): Promise<number> {
   const args = process.argv.slice(2);
   if (args.length === 0) {
@@ -131,6 +189,8 @@ async function main(): Promise<number> {
       return cmdFmt(rest);
     case "lint":
       return cmdLint(rest);
+    case "generate":
+      return cmdGenerate(rest);
     default:
       usage();
       return 2;
